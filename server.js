@@ -9,7 +9,6 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// 🟢 Endpoint to generate an HTML document and save it as a file
 app.post("/generate", (req, res) => {
   try {
     const html = generateHtmlDoc(req.body);
