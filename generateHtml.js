@@ -1,77 +1,112 @@
-const fs = require("fs");
-
 function generateHtmlDoc(data) {
   const { layout, content, styles = {}, resolution } = data;
 
   if (!resolution || !resolution.width || !resolution.height) {
-    throw new Error(
-      "Missing resolution information. Please provide { width, height }."
-    );
+    throw new Error("Missing resolution information. Please provide { width, height }.");
   }
 
   const { width: screenWidth, height: screenHeight } = resolution;
-
   const numRows = layout.length;
   const numCols = layout[0].length;
 
-  // Calculate fixed cell size based on provided resolution
+  // Calculate fixed cell size based on resolution
   const cellHeight = Math.floor(screenHeight / numRows);
   const cellWidth = Math.floor(screenWidth / numCols);
-
-  // Compute bounding boxes for each unique element
-  const elements = {};
-  for (let i = 0; i < numRows; i++) {
-    for (let j = 0; j < numCols; j++) {
-      const key = layout[i][j];
-      if (!elements[key]) {
-        elements[key] = { minRow: i, maxRow: i, minCol: j, maxCol: j };
-      } else {
-        elements[key].minRow = Math.min(elements[key].minRow, i);
-        elements[key].maxRow = Math.max(elements[key].maxRow, i);
-        elements[key].minCol = Math.min(elements[key].minCol, j);
-        elements[key].maxCol = Math.max(elements[key].maxCol, j);
-      }
-    }
-  }
 
   let elementsHtml = "";
   const tagSet = new Set();
 
-  for (let key in elements) {
-    const pos = elements[key];
-    const top = pos.minRow * cellHeight;
-    const left = pos.minCol * cellWidth;
-    const height = (pos.maxRow - pos.minRow + 1) * cellHeight;
-    const width = (pos.maxCol - pos.minCol + 1) * cellWidth;
+  // Tracking element positions for merging
+  const mergedElements = {};
+  const individualElements = [];
 
-    // Base styles (Fixed absolute positioning using provided resolution)
-    const baseStyles = `
-        position: absolute;
-        top: ${top}px;
-        left: ${left}px;
-        width: ${width}px;
-        height: ${height}px;
-        margin: 0;
-        display: block;
-      `;
+  for (let i = 0; i < numRows; i++) {
+    for (let j = 0; j < numCols; j++) {
+      const key = layout[i][j];
 
-    // Append custom styles
-    const customStyles = styles[key] || "";
-    const finalStyles = baseStyles + customStyles;
+      if (!key) continue; // Skip empty cells
 
-    // Extract tag name (e.g., "h2" from "h2.0")
-    const [tag] = key.split(".");
-    tagSet.add(tag);
-    const innerContent = content[key] || "";
+      const [tag] = key.split(".");
+      tagSet.add(tag);
 
-    elementsHtml += `<${tag} style="${finalStyles}">${innerContent}</${tag}>`;
+      const top = i * cellHeight;
+      const left = j * cellWidth;
+
+      // Elements that should be merged (header, footer, nav, etc.)
+      if (tag === "header" || tag === "footer" || tag === "nav") {
+        if (!mergedElements[key]) {
+          mergedElements[key] = {
+            minRow: i,
+            maxRow: i,
+            minCol: j,
+            maxCol: j,
+            tag,
+            innerContent: content[key] || "",
+            styles: styles[key] || "",
+          };
+        } else {
+          mergedElements[key].maxRow = Math.max(mergedElements[key].maxRow, i);
+          mergedElements[key].maxCol = Math.max(mergedElements[key].maxCol, j);
+        }
+      } else {
+        // Elements that appear multiple times, like <p>, should remain separate
+        individualElements.push({
+          tag,
+          innerContent: content[key] || "",
+          styles: styles[key] || "",
+          top,
+          left,
+          width: cellWidth,
+          height: cellHeight,
+        });
+      }
+    }
   }
 
-  // Ensure all custom elements display correctly
+  // Generate merged elements (headers, footers, etc.)
+  for (let key in mergedElements) {
+    const el = mergedElements[key];
+
+    const top = el.minRow * cellHeight;
+    const left = el.minCol * cellWidth;
+    const width = (el.maxCol - el.minCol + 1) * cellWidth; // Corrected width span
+    const height = (el.maxRow - el.minRow + 1) * cellHeight; // Corrected height span
+
+    const mergedStyles = `
+      position: absolute;
+      top: ${top}px;
+      left: ${left}px;
+      width: ${width}px;
+      height: ${height}px;
+      margin: 0;
+      display: block;
+      ${el.styles}
+    `;
+
+    elementsHtml += `<${el.tag} style="${mergedStyles}">${el.innerContent}</${el.tag}>`;
+  }
+
+  // Generate individual elements (paragraphs, divs, etc.)
+  for (const el of individualElements) {
+    const elStyles = `
+      position: absolute;
+      top: ${el.top}px;
+      left: ${el.left}px;
+      width: ${el.width}px;
+      height: ${el.height}px;
+      margin: 0;
+      display: block;
+      ${el.styles}
+    `;
+
+    elementsHtml += `<${el.tag} style="${elStyles}">${el.innerContent}</${el.tag}>`;
+  }
+
+  // Ensure custom elements display properly
   const customTagsRule = Array.from(tagSet).join(", ") + " { display: block; }";
 
   // Construct final HTML document
-  const htmlDoc = `
+  return `
     <!DOCTYPE html>
     <html>
       <head>
@@ -102,8 +137,7 @@ function generateHtmlDoc(data) {
         </div>
       </body>
     </html>
-    `;
-
-  return htmlDoc;
+  `;
 }
+
 module.exports = generateHtmlDoc;
