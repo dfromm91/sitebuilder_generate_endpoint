@@ -15,10 +15,7 @@ function generateHtmlDoc(data) {
 
   let elementsHtml = "";
   const tagSet = new Set();
-
-  // Tracking element positions for merging
   const mergedElements = {};
-  const individualElements = [];
 
   for (let i = 0; i < numRows; i++) {
     for (let j = 0; j < numCols; j++) {
@@ -29,48 +26,32 @@ function generateHtmlDoc(data) {
       const [tag] = key.split(".");
       tagSet.add(tag);
 
-      const top = i * cellHeight;
-      const left = j * cellWidth;
-
-      // Elements that should be merged (header, footer, nav, etc.)
-      if (tag === "header" || tag === "footer" || tag === "nav") {
-        if (!mergedElements[key]) {
-          mergedElements[key] = {
-            minRow: i,
-            maxRow: i,
-            minCol: j,
-            maxCol: j,
-            tag,
-            innerContent: content[key] || "",
-            styles: styles[key] || "",
-          };
-        } else {
-          mergedElements[key].maxRow = Math.max(mergedElements[key].maxRow, i);
-          mergedElements[key].maxCol = Math.max(mergedElements[key].maxCol, j);
-        }
-      } else {
-        // Elements that appear multiple times, like <p>, should remain separate
-        individualElements.push({
+      // Track the bounding box for merged elements
+      if (!mergedElements[key]) {
+        mergedElements[key] = {
+          minRow: i,
+          maxRow: i,
+          minCol: j,
+          maxCol: j,
           tag,
           innerContent: content[key] || "",
           styles: styles[key] || "",
-          top,
-          left,
-          width: cellWidth,
-          height: cellHeight,
-        });
+        };
+      } else {
+        mergedElements[key].maxRow = Math.max(mergedElements[key].maxRow, i);
+        mergedElements[key].maxCol = Math.max(mergedElements[key].maxCol, j);
       }
     }
   }
 
-  // Generate merged elements (headers, footers, etc.)
+  // Generate merged elements
   for (let key in mergedElements) {
     const el = mergedElements[key];
 
     const top = el.minRow * cellHeight;
     const left = el.minCol * cellWidth;
-    const width = (el.maxCol - el.minCol + 1) * cellWidth; // Corrected width span
-    const height = (el.maxRow - el.minRow + 1) * cellHeight; // Corrected height span
+    const width = (el.maxCol - el.minCol + 1) * cellWidth;
+    const height = (el.maxRow - el.minRow + 1) * cellHeight;
 
     const mergedStyles = `
       position: absolute;
@@ -86,22 +67,6 @@ function generateHtmlDoc(data) {
     elementsHtml += `<${el.tag} style="${mergedStyles}">${el.innerContent}</${el.tag}>`;
   }
 
-  // Generate individual elements (paragraphs, divs, etc.)
-  for (const el of individualElements) {
-    const elStyles = `
-      position: absolute;
-      top: ${el.top}px;
-      left: ${el.left}px;
-      width: ${el.width}px;
-      height: ${el.height}px;
-      margin: 0;
-      display: block;
-      ${el.styles}
-    `;
-
-    elementsHtml += `<${el.tag} style="${elStyles}">${el.innerContent}</${el.tag}>`;
-  }
-
   // Ensure custom elements display properly
   const customTagsRule = Array.from(tagSet).join(", ") + " { display: block; }";
 
@@ -112,7 +77,7 @@ function generateHtmlDoc(data) {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Fixed Monitor Layout</title>
+        <title>generate html api test</title>
         <style>
           html, body {
             margin: 0;
